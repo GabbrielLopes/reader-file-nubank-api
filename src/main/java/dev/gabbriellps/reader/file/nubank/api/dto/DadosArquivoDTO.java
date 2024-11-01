@@ -1,5 +1,6 @@
 package dev.gabbriellps.reader.file.nubank.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class DadosArquivoDTO {
 //    private String categoria;
     private String titulo;
     private Double valor;
+    @JsonIgnore
     private String nome;
 
 

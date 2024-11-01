@@ -31,24 +31,16 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         log.info("m=readFile -> Iniciando conversão de linhas para DTOs...");
         List<DadosArquivoDTO> dadosArquivoDTO = lines.stream()
                 .map(ReaderFileServiceImpl::montaLinhaDTO)
+                .filter(Objects::nonNull)
                 .toList();
         log.info("m=readFile -> Linhas convertida em DTOs com sucesso!");
 
-        MultiValueMap<String, DadosArquivoDTO> arquivosNomesAgrupados = new LinkedMultiValueMap<>();
-
         log.info("m=readFile -> Iniciando agrupamento das compras pelos nomes");
-        dadosArquivoDTO.forEach(dado -> {
-            if(dado.getTitulo().equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
-                return;
-            }
-
-            String nome = getNomeByTitulo(dado.getTitulo());
-            arquivosNomesAgrupados.add(nome, dado);
-        });
+        Map<String, List<DadosArquivoDTO>> dadosAgrupados = dadosArquivoDTO.stream()
+                .collect(Collectors.groupingBy(DadosArquivoDTO::getNome));
 
         List<DadosCompraResponseDTO> response = new ArrayList<>();
-
-        arquivosNomesAgrupados.forEach((nome, dado) -> response.add(new DadosCompraResponseDTO(nome, dado)));
+        dadosAgrupados.forEach((nome, dado) -> response.add(new DadosCompraResponseDTO(nome, dado)));
 
         return response;
     }
@@ -83,15 +75,25 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         log.info("m=montaLinhaDTO -> Iniciando montagem de linha para DTO");
         List<String> dados = Arrays.stream(line.split(",")).toList();
 
+        String titulo = getTitulo(dados);
+
+        if(titulo.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
+            return null;
+        }
+
         DadosArquivoDTO dadosArquivoDTO = DadosArquivoDTO.builder()
                 .data(LocalDate.parse(dados.get(0), DateTimeFormatter.ISO_LOCAL_DATE))
-//                .categoria(dados.get(1))
-                .titulo(dados.get(1))
+                .titulo(titulo)
                 .valor(Double.parseDouble(dados.get(2)))
+                .nome(getNomeByTitulo(titulo))
                 .build();
 
         log.info("m=montaLinhaDTO -> Montagem de linha para DTO realizada com sucesso!");
         return dadosArquivoDTO;
+    }
+
+    private static String getTitulo(List<String> dados) {
+        return dados.get(1);
     }
 
     private static List<String> readLines(File faturaConvertida) throws IOException {

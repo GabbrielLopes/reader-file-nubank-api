@@ -27,7 +27,7 @@ public class DadosCompraResponseDTO {
     public String getComprasConcat() {
         return compras.stream().map(dados -> String.format("Data: %s - Titulo: %s - Valor: %s",
                         Util.formatarDataBRL(dados.getData()), dados.getTitulo(), dados.getValor()))
-                .collect(Collectors.joining(System.getProperty("line.separator")));
+                .collect(Collectors.joining("|"));
     }
 
 }
