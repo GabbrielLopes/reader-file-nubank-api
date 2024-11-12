@@ -101,13 +101,21 @@ public class ReaderFileServiceImpl implements ReaderFileService {
                 .titulo(tituloComParcela)
                 .valor(Double.parseDouble(dados.get(2)))
                 .nome(getNomeByTitulo(titleSemAspas))
+                .obs(Strings.EMPTY)
                 .build();
 
-        String queryParams = tituloComParcela + "?teste=valor&obs=teste testado com sucesso";
-        queryParams = queryParams.substring(queryParams.indexOf("?"));
+        int indexQueryParams = tituloComParcela.indexOf("?");
+        if(isIndexInvalido(indexQueryParams)){
+            log.info("m=montaLinhaDTO -> Linha nao contem query param, objeto montado com sucesso!");
+            return dadosArquivoDTO;
+        }
+        log.info("m=montaLinhaDTO -> Encontrado queryParams, montando campo observacao");
+        String queryParams = tituloComParcela.substring(indexQueryParams);
 
-        String jsonString = convertQueryParamsToObject(queryParams);
+        String jsonString = convertQueryParamsToStringObject(queryParams);
         Map<String, Object> map = convertJsonStringParaHashMap(jsonString);
+
+        log.info("m=montaLinhaDTO -> setando campo observacao");
         dadosArquivoDTO.setObs(String.valueOf(map.get("obs")));
 
         log.info("m=montaLinhaDTO -> Montagem de linha para DTO realizada com sucesso!");
@@ -115,22 +123,25 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     }
 
     private Map<String, Object> convertJsonStringParaHashMap(String test) {
-        Map<String, Object> map;
-
+        log.info("m=convertJsonStringParaHashMap, entrando metodo converte string objeto para hash map");
         try {
-            map = om.readValue(test, new TypeReference<>() {});
+            Map<String, Object> map = om.readValue(test, new TypeReference<>() {});
+            log.info("m=convertJsonStringParaHashMap, string objeto convertido para hash map com sucesso!");
+            return map;
         } catch (JsonProcessingException e) {
-            log.error("m=montaLinhaDTO, erro ao converter string para objeto ", e);
+            log.error("m=montaLinhaDTO, erro ao converter string objeto para hash map ", e);
             throw new RuntimeException(e);
         }
-        return map;
     }
 
-    private static String convertQueryParamsToObject(String titulo) {
-        return titulo.transform(s -> s.replace("?", "{\"")
+    private static String convertQueryParamsToStringObject(String titulo) {
+        log.info("m=convertQueryParamsToStringObject, entrando metodo converte query params para string objeto");
+        String objectString = titulo.transform(s -> s.replace("?", "{\"")
                 .replace("?", "{\"")
                 .replace("=", "\":\"")
                 .replace("&", "\",\"")) + "\"}";
+        log.info("m=convertQueryParamsToStringObject, query params convertido para string objeto com sucesso!");
+        return objectString;
     }
 
     private static String getTitulo(List<String> dados) {
