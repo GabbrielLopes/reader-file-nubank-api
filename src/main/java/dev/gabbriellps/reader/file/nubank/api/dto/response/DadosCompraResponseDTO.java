@@ -24,10 +24,10 @@ public class DadosCompraResponseDTO {
         return compras.stream().mapToDouble(DadosArquivoDTO::getValor).sum();
     }
 
-    public String getComprasConcat() {
-        return compras.stream().map(dados -> String.format("Data: %s - Titulo: %s - Valor: %s",
-                        Util.formatarDataBRL(dados.getData()), dados.getTitulo(), dados.getValor()))
-                .collect(Collectors.joining("|"));
-    }
+//    public String getComprasConcat() {
+//        return compras.stream().map(dados -> String.format("Data: %s - Titulo: %s - Valor: %s",
+//                        Util.formatarDataBRL(dados.getData()), dados.getTitulo(), dados.getValor()))
+//                .collect(Collectors.joining("|"));
+//    }
 
 }

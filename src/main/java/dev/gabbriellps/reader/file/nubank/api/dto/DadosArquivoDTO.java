@@ -20,6 +20,7 @@ public class DadosArquivoDTO {
     private Double valor;
     @JsonIgnore
     private String nome;
+    private String obs;
 
 
 }

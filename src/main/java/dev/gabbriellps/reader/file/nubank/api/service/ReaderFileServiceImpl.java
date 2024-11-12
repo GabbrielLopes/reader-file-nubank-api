@@ -1,25 +1,29 @@
 package dev.gabbriellps.reader.file.nubank.api.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.gabbriellps.reader.file.nubank.api.dto.DadosArquivoDTO;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.DadosCompraResponseDTO;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.ReaderFileService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class ReaderFileServiceImpl implements ReaderFileService {
 
+    private final ObjectMapper om;
 
     @Override
     public List<DadosCompraResponseDTO> readFile(MultipartFile faturaFile) throws IOException {
@@ -30,7 +34,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
 
         log.info("m=readFile -> Iniciando conversão de linhas para DTOs...");
         List<DadosArquivoDTO> dadosArquivoDTO = lines.stream()
-                .map(ReaderFileServiceImpl::montaLinhaDTO)
+                .map(this::montaLinhaDTO)
                 .filter(Objects::nonNull)
                 .toList();
         log.info("m=readFile -> Linhas convertida em DTOs com sucesso!");
@@ -46,11 +50,8 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     }
 
     private static String getNomeByTitulo(String titulo) {
-        int indexParcela = titulo.lastIndexOf("- Parcela") - 1;
-        if(isIndexInvalido(indexParcela)){
-            indexParcela = titulo.length();
-        }
-        titulo = titulo.substring(0, indexParcela);
+        titulo = removeParcelaDoTitulo(titulo);
+
         int indexInicioNome = titulo.lastIndexOf("-");
         if(isIndexInvalido(indexInicioNome)){ // Se não tiver hifen = sem nome
             return "sem nome";
@@ -67,33 +68,85 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         return nome.substring(0, indexFinalNome);
     }
 
+    private static String removeParcelaDoTitulo(String titulo) {
+        int indexParcela = titulo.lastIndexOf("- Parcela") - 1;
+        if(isIndexInvalido(indexParcela)){
+            indexParcela = titulo.length();
+        }
+        return titulo.substring(0, indexParcela);
+    }
+
+    private static String removeAspasString(String titulo) {
+        return titulo.replace("\"", Strings.EMPTY);
+    }
+
     private static boolean isIndexInvalido(int indexName) {
         return indexName < 0;
     }
 
-    private static DadosArquivoDTO montaLinhaDTO(String line) {
+    private DadosArquivoDTO montaLinhaDTO(String line) {
         log.info("m=montaLinhaDTO -> Iniciando montagem de linha para DTO");
-        List<String> dados = Arrays.stream(line.split(",")).toList();
+        List<String> dados = new ArrayList<>(Arrays.stream(line.split(",")).toList());
 
-        String titulo = getTitulo(dados);
+        String titleSemAspas = removeAspasString(dados.get(1));
+        dados.set(1, titleSemAspas);
+        String tituloComParcela = getTitulo(dados);
 
-        if(titulo.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
+        if(tituloComParcela.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
             return null;
         }
 
         DadosArquivoDTO dadosArquivoDTO = DadosArquivoDTO.builder()
                 .data(LocalDate.parse(dados.get(0), DateTimeFormatter.ISO_LOCAL_DATE))
-                .titulo(titulo)
+                .titulo(tituloComParcela)
                 .valor(Double.parseDouble(dados.get(2)))
-                .nome(getNomeByTitulo(titulo))
+                .nome(getNomeByTitulo(titleSemAspas))
                 .build();
+
+        String queryParams = tituloComParcela + "?teste=valor&obs=teste testado com sucesso";
+        queryParams = queryParams.substring(queryParams.indexOf("?"));
+
+        String jsonString = convertQueryParamsToObject(queryParams);
+        Map<String, Object> map = convertJsonStringParaHashMap(jsonString);
+        dadosArquivoDTO.setObs(String.valueOf(map.get("obs")));
 
         log.info("m=montaLinhaDTO -> Montagem de linha para DTO realizada com sucesso!");
         return dadosArquivoDTO;
     }
 
+    private Map<String, Object> convertJsonStringParaHashMap(String test) {
+        Map<String, Object> map;
+
+        try {
+            map = om.readValue(test, new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            log.error("m=montaLinhaDTO, erro ao converter string para objeto ", e);
+            throw new RuntimeException(e);
+        }
+        return map;
+    }
+
+    private static String convertQueryParamsToObject(String titulo) {
+        return titulo.transform(s -> s.replace("?", "{\"")
+                .replace("?", "{\"")
+                .replace("=", "\":\"")
+                .replace("&", "\",\"")) + "\"}";
+    }
+
     private static String getTitulo(List<String> dados) {
-        return dados.get(1);
+        String title = dados.get(1);
+
+        int indexParcela = title.indexOf("- Parcela");
+        String parcela = Strings.EMPTY;
+        if(!isIndexInvalido(indexParcela)){
+            parcela = title.substring(indexParcela);
+        }
+
+        int maxIndex = title.indexOf("-");
+        if(isIndexInvalido(maxIndex)) {
+            maxIndex = title.length();
+        }
+        return title.substring(0, maxIndex) + parcela;
     }
 
     private static List<String> readLines(File faturaConvertida) throws IOException {
