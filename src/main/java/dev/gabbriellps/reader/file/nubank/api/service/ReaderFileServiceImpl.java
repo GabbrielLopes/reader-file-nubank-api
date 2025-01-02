@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.gabbriellps.reader.file.nubank.api.dto.DadosArquivoDTO;
+import dev.gabbriellps.reader.file.nubank.api.dto.response.ComprasResponseGeral;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.DadosCompraResponseDTO;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.ReaderFileService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -26,7 +29,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     private final ObjectMapper om;
 
     @Override
-    public List<DadosCompraResponseDTO> readFile(MultipartFile faturaFile) throws IOException {
+    public ComprasResponseGeral readFile(MultipartFile faturaFile) throws IOException {
         log.info("m=readFile -> Iniciando leitura arquivo...");
         File faturaConvertida = convertMultipartToFile(faturaFile);
 
@@ -46,7 +49,13 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         List<DadosCompraResponseDTO> response = new ArrayList<>();
         dadosAgrupados.forEach((nome, dado) -> response.add(new DadosCompraResponseDTO(nome, dado)));
 
-        return response;
+
+        return ComprasResponseGeral.builder()
+                .response(response)
+                .vlrTotalGeral(response.stream()
+                        .map(DadosCompraResponseDTO::getValorTotal)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .build();
     }
 
     private static String getNomeByTitulo(String titulo) {
@@ -88,29 +97,33 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         log.info("m=montaLinhaDTO -> Iniciando montagem de linha para DTO");
         List<String> dados = new ArrayList<>(Arrays.stream(line.split(",")).toList());
 
-        String titleSemAspas = removeAspasString(dados.get(1));
-        dados.set(1, titleSemAspas);
+        String titleCompletoSemAspas = removeAspasString(dados.get(1));
+        dados.set(1, titleCompletoSemAspas);
         String tituloComParcela = getTitulo(dados);
 
         if(tituloComParcela.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
             return null;
         }
 
+        BigDecimal valor = BigDecimal.valueOf(Double.parseDouble(removeAspasString(dados.get(2))))
+                .setScale(2, RoundingMode.HALF_UP);
+
         DadosArquivoDTO dadosArquivoDTO = DadosArquivoDTO.builder()
-                .data(LocalDate.parse(dados.get(0), DateTimeFormatter.ISO_LOCAL_DATE))
+                .data(LocalDate.parse(removeAspasString(dados.get(0)), DateTimeFormatter.ISO_LOCAL_DATE))
                 .titulo(tituloComParcela)
-                .valor(Double.parseDouble(dados.get(2)))
-                .nome(getNomeByTitulo(titleSemAspas))
+                .valor(valor)
+                .nome(getNomeByTitulo(titleCompletoSemAspas))
                 .obs(Strings.EMPTY)
                 .build();
 
-        int indexQueryParams = tituloComParcela.indexOf("?");
+        int indexQueryParams = titleCompletoSemAspas.indexOf("?");
         if(isIndexInvalido(indexQueryParams)){
             log.info("m=montaLinhaDTO -> Linha nao contem query param, objeto montado com sucesso!");
             return dadosArquivoDTO;
         }
         log.info("m=montaLinhaDTO -> Encontrado queryParams, montando campo observacao");
-        String queryParams = tituloComParcela.substring(indexQueryParams);
+        String queryParams = titleCompletoSemAspas.substring(indexQueryParams);
+        queryParams = removeParcelaDoTitulo(queryParams);
 
         String jsonString = convertQueryParamsToStringObject(queryParams);
         Map<String, Object> map = convertJsonStringParaHashMap(jsonString);
@@ -145,19 +158,25 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     }
 
     private static String getTitulo(List<String> dados) {
-        String title = dados.get(1);
-
-        int indexParcela = title.indexOf("- Parcela");
+        String titleCompleto = dados.get(1);
         String parcela = Strings.EMPTY;
+
+        int indexParcela = titleCompleto.indexOf("- Parcela");
         if(!isIndexInvalido(indexParcela)){
-            parcela = title.substring(indexParcela);
+            parcela = titleCompleto.substring(indexParcela);
         }
 
-        int maxIndex = title.indexOf("-");
-        if(isIndexInvalido(maxIndex)) {
-            maxIndex = title.length();
+        int indexNome = titleCompleto.indexOf("-");
+        if(isIndexInvalido(indexNome)) {
+            indexNome = titleCompleto.length();
         }
-        return title.substring(0, maxIndex) + parcela;
+
+        int indexQueryParam = titleCompleto.indexOf("?");
+        if(!isIndexInvalido(indexQueryParam)) {
+            indexNome = indexQueryParam - 1;
+        }
+
+        return titleCompleto.substring(0, indexNome) + parcela;
     }
 
     private static List<String> readLines(File faturaConvertida) throws IOException {

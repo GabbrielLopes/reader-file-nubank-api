@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,8 +22,11 @@ public class DadosCompraResponseDTO {
     private List<DadosArquivoDTO> compras;
 
 
-    public Double getValorTotal(){
-        return compras.stream().mapToDouble(DadosArquivoDTO::getValor).sum();
+    public BigDecimal getValorTotal() {
+        return compras.stream()
+                .map(DadosArquivoDTO::getValor)
+                .map(vlr -> vlr.setScale(2, RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
 //    public String getComprasConcat() {
