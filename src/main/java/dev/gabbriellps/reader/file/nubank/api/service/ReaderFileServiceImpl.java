@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.gabbriellps.reader.file.nubank.api.dto.DadosArquivoDTO;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.ComprasResponseGeral;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.DadosCompraResponseDTO;
+import dev.gabbriellps.reader.file.nubank.api.service.interfaces.GeraArquivoComprasService;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.ReaderFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 public class ReaderFileServiceImpl implements ReaderFileService {
 
     private final ObjectMapper om;
+    private final GeraArquivoComprasService geraArquivoComprasService;
 
     @Override
     public ComprasResponseGeral readFile(MultipartFile faturaFile) throws IOException {
@@ -50,26 +52,30 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         dadosAgrupados.forEach((nome, dado) -> response.add(new DadosCompraResponseDTO(nome, dado)));
 
 
-        return ComprasResponseGeral.builder()
+        ComprasResponseGeral responseFinal = ComprasResponseGeral.builder()
                 .response(response)
                 .vlrTotalGeral(response.stream()
                         .map(DadosCompraResponseDTO::getValorTotal)
                         .reduce(BigDecimal.ZERO, BigDecimal::add))
                 .build();
+
+        geraArquivoComprasService.gerarArquivoCompras(responseFinal);
+
+        return responseFinal;
     }
 
     private static String getNomeByTitulo(String titulo) {
         titulo = removeParcelaDoTitulo(titulo);
 
         int indexInicioNome = titulo.lastIndexOf("-");
-        if(isIndexInvalido(indexInicioNome)){ // Se não tiver hifen = sem nome
+        if (isIndexInvalido(indexInicioNome)) { // Se não tiver hifen = sem nome
             return "sem nome";
         }
         indexInicioNome += 1;
         String nome = titulo.substring(indexInicioNome);
 
         int indexFinalNome = nome.indexOf(" "); // Se for item parcelado, fica o nome e a parcela ex: -> "nomeExemplo 2/3",
-        if(isIndexInvalido(indexFinalNome)){ // Se nao tiver espaco após o nome, o item nao é parcelado entao o nome já vem certo
+        if (isIndexInvalido(indexFinalNome)) { // Se nao tiver espaco após o nome, o item nao é parcelado entao o nome já vem certo
             return nome;
         }
 
@@ -79,7 +85,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
 
     private static String removeParcelaDoTitulo(String titulo) {
         int indexParcela = titulo.lastIndexOf("- Parcela") - 1;
-        if(isIndexInvalido(indexParcela)){
+        if (isIndexInvalido(indexParcela)) {
             indexParcela = titulo.length();
         }
         return titulo.substring(0, indexParcela);
@@ -101,7 +107,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         dados.set(1, titleCompletoSemAspas);
         String tituloComParcela = getTitulo(dados);
 
-        if(tituloComParcela.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
+        if (tituloComParcela.equals("Pagamento recebido")) { // Não adiciona pagamento recebido para a lista
             return null;
         }
 
@@ -117,7 +123,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
                 .build();
 
         int indexQueryParams = titleCompletoSemAspas.indexOf("?");
-        if(isIndexInvalido(indexQueryParams)){
+        if (isIndexInvalido(indexQueryParams)) {
             log.info("m=montaLinhaDTO -> Linha nao contem query param, objeto montado com sucesso!");
             return dadosArquivoDTO;
         }
@@ -162,17 +168,17 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         String parcela = Strings.EMPTY;
 
         int indexParcela = titleCompleto.indexOf("- Parcela");
-        if(!isIndexInvalido(indexParcela)){
+        if (!isIndexInvalido(indexParcela)) {
             parcela = titleCompleto.substring(indexParcela);
         }
 
         int indexNome = titleCompleto.indexOf("-");
-        if(isIndexInvalido(indexNome)) {
+        if (isIndexInvalido(indexNome)) {
             indexNome = titleCompleto.length();
         }
 
         int indexQueryParam = titleCompleto.indexOf("?");
-        if(!isIndexInvalido(indexQueryParam)) {
+        if (!isIndexInvalido(indexQueryParam)) {
             indexNome = indexQueryParam - 1;
         }
 
