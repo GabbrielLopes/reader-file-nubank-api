@@ -16,7 +16,6 @@ import java.time.LocalDate;
 public class DadosArquivoDTO {
 
     private LocalDate data;
-//    private String categoria;
     private String titulo;
     private BigDecimal valor;
     @JsonIgnore

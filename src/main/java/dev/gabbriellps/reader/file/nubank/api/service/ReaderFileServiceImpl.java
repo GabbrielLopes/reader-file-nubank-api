@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.gabbriellps.reader.file.nubank.api.dto.DadosArquivoDTO;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.ComprasResponseGeral;
 import dev.gabbriellps.reader.file.nubank.api.dto.response.DadosCompraResponseDTO;
+import dev.gabbriellps.reader.file.nubank.api.enumeration.Cabecalho;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.GeraArquivoComprasService;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.ReaderFileService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.apache.logging.log4j.util.Strings;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.io.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -22,13 +24,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@Service
 @Slf4j
+@Service
 @RequiredArgsConstructor
 public class ReaderFileServiceImpl implements ReaderFileService {
 
     private final ObjectMapper om;
-    private final GeraArquivoComprasService geraArquivoComprasService;
 
     @Override
     public ComprasResponseGeral readFile(MultipartFile faturaFile) throws IOException {
@@ -51,17 +52,12 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         List<DadosCompraResponseDTO> response = new ArrayList<>();
         dadosAgrupados.forEach((nome, dado) -> response.add(new DadosCompraResponseDTO(nome, dado)));
 
-
-        ComprasResponseGeral responseFinal = ComprasResponseGeral.builder()
+        return ComprasResponseGeral.builder()
                 .response(response)
                 .vlrTotalGeral(response.stream()
                         .map(DadosCompraResponseDTO::getValorTotal)
                         .reduce(BigDecimal.ZERO, BigDecimal::add))
                 .build();
-
-        geraArquivoComprasService.gerarArquivoCompras(responseFinal);
-
-        return responseFinal;
     }
 
     private static String getNomeByTitulo(String titulo) {
@@ -86,7 +82,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     private static String removeParcelaDoTitulo(String titulo) {
         int indexParcela = titulo.lastIndexOf("- Parcela") - 1;
         if (isIndexInvalido(indexParcela)) {
-            indexParcela = titulo.length();
+            return titulo;
         }
         return titulo.substring(0, indexParcela);
     }
@@ -103,7 +99,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
         log.info("m=montaLinhaDTO -> Iniciando montagem de linha para DTO");
         List<String> dados = new ArrayList<>(Arrays.stream(line.split(",")).toList());
 
-        String titleCompletoSemAspas = removeAspasString(dados.get(1));
+        String titleCompletoSemAspas = removeAspasString(dados.get(Cabecalho.TITULO.getIndex()));
         dados.set(1, titleCompletoSemAspas);
         String tituloComParcela = getTitulo(dados);
 
@@ -111,11 +107,11 @@ public class ReaderFileServiceImpl implements ReaderFileService {
             return null;
         }
 
-        BigDecimal valor = BigDecimal.valueOf(Double.parseDouble(removeAspasString(dados.get(2))))
+        BigDecimal valor = BigDecimal.valueOf(Double.parseDouble(removeAspasString(dados.get(Cabecalho.VALOR.getIndex()))))
                 .setScale(2, RoundingMode.HALF_UP);
 
         DadosArquivoDTO dadosArquivoDTO = DadosArquivoDTO.builder()
-                .data(LocalDate.parse(removeAspasString(dados.get(0)), DateTimeFormatter.ISO_LOCAL_DATE))
+                .data(LocalDate.parse(removeAspasString(dados.get(Cabecalho.DATA.getIndex())), DateTimeFormatter.ISO_LOCAL_DATE))
                 .titulo(tituloComParcela)
                 .valor(valor)
                 .nome(getNomeByTitulo(titleCompletoSemAspas))
@@ -164,7 +160,7 @@ public class ReaderFileServiceImpl implements ReaderFileService {
     }
 
     private static String getTitulo(List<String> dados) {
-        String titleCompleto = dados.get(1);
+        String titleCompleto = dados.get(Cabecalho.TITULO.getIndex());
         String parcela = Strings.EMPTY;
 
         int indexParcela = titleCompleto.indexOf("- Parcela");

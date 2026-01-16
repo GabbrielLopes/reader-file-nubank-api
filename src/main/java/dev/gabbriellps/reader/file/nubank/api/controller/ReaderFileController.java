@@ -1,6 +1,7 @@
 package dev.gabbriellps.reader.file.nubank.api.controller;
 
 import dev.gabbriellps.reader.file.nubank.api.dto.response.ComprasResponseGeral;
+import dev.gabbriellps.reader.file.nubank.api.service.interfaces.GeraArquivoComprasService;
 import dev.gabbriellps.reader.file.nubank.api.service.interfaces.ReaderFileService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,17 +18,23 @@ import java.io.IOException;
 public class ReaderFileController {
 
     private final ReaderFileService readerFileService;
+    private final GeraArquivoComprasService geraArquivoComprasService;
 
 
-    public ReaderFileController(ReaderFileService readerFileService) {
+    public ReaderFileController(ReaderFileService readerFileService,
+                                GeraArquivoComprasService geraArquivoComprasService) {
         this.readerFileService = readerFileService;
+        this.geraArquivoComprasService = geraArquivoComprasService;
     }
 
 
     @PostMapping(value = "/file")
     public ResponseEntity<ComprasResponseGeral> readFile(@RequestPart("fatura") MultipartFile faturaFile)
             throws IOException {
-        return ResponseEntity.status(HttpStatus.OK).body(readerFileService.readFile(faturaFile));
+        ComprasResponseGeral compras = readerFileService.readFile(faturaFile);
+        geraArquivoComprasService.gerarArquivoCompras(compras, faturaFile.getOriginalFilename());
+
+        return ResponseEntity.status(HttpStatus.OK).body(compras);
     }
 
 }

@@ -6,27 +6,30 @@ import dev.gabbriellps.reader.file.nubank.api.service.interfaces.GeraArquivoComp
 import dev.gabbriellps.reader.file.nubank.api.util.Util;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
-@Service
 @Slf4j
+@Service
 public class GeraArquivoComprasServiceImpl implements GeraArquivoComprasService {
 
-    private static final String caminho = "C:\\Users\\gabriel\\Documents\\14_Faturas_Nubank\\";
-
+    @Value("${diretorio.arquivo.compras}")
+    private String caminho;
 
     @Override
-    public void gerarArquivoCompras(ComprasResponseGeral comprasResponse) {
+    public void gerarArquivoCompras(ComprasResponseGeral comprasResponse, String nomeArquivo) {
         log.info("Iniciando o processo de geração do arquivo de compras.");
-        // Implementação da lógica para gerar o arquivo de compras
-        // ...
 
-        String nomeArquivo = "Compras_" + LocalDateTime.now().getMonthValue() + "_" + LocalDateTime.now().getYear() + ".txt";
+        LocalDate data = extraiDataPeloNomeArquivo(nomeArquivo);
+
+        nomeArquivo = "Nubank_Fatura_" + data.getMonthValue() + "_" + data.getYear() + ".txt";
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(caminho + nomeArquivo, true))) {
 
@@ -56,6 +59,19 @@ public class GeraArquivoComprasServiceImpl implements GeraArquivoComprasService 
         }
 
         log.info("Arquivo de compras gerado com sucesso.");
+    }
+
+    private static LocalDate extraiDataPeloNomeArquivo(String nomeArquivo) {
+        if (StringUtils.isBlank(nomeArquivo) || !nomeArquivo.contains("_") || !nomeArquivo.contains(".")) {
+            throw new IllegalArgumentException("Nome do arquivo inválido: " + nomeArquivo);
+        }
+
+        try {
+            String data = nomeArquivo.substring(nomeArquivo.lastIndexOf("_") + 1, nomeArquivo.lastIndexOf("."));
+            return LocalDate.parse(data, DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Formato de data inválido no nome do arquivo: " + nomeArquivo, e);
+        }
     }
 
     private void addHifens(BufferedWriter writer) throws IOException {
